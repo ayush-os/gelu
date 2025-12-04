@@ -11,10 +11,14 @@ add_executable(gelu
     src/kernels/kernel_baseline.cu
 )
 
+target_include_directories(gelu PRIVATE ${CUDA_INCLUDE_DIRS})
+
 target_compile_options(gelu PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:-std=c++14;-O3;-lineinfo;--expt-relaxed-constexpr>
     $<$<COMPILE_LANGUAGE:CUDA>:SHELL:-arch=sm_80>
 )
+
+set(CMAKE_CUDA_ARCHITECTURES "86" CACHE STRING "Target CUDA architectures")
 
 target_link_libraries(gelu PRIVATE
     ${CUDA_LIBRARIES}
