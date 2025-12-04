@@ -18,7 +18,7 @@ int main() {
     const int N = 1 << N_BITS; // 16,777,216 elements
     const size_t bytes = N * sizeof(float);
 
-    std::cout << "--- GELU Test ---" << std::endl;
+    std::cout << "--- GELU Test (1000 Iterations) ---" << std::endl;
     std::cout << "Array Size N: " << N << " (" << (double)bytes / (1024*1024*1024) << " GB)" << std::endl;
 
     std::vector<float> h_input(N);
@@ -36,24 +36,33 @@ int main() {
 
     const int THREADS_PER_BLOCK = 256;
     const int NUM_BLOCKS = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
+    const int NUM_ITERATIONS = 1000;
 
-    std::cout << "Launching kernel with " << NUM_BLOCKS << " blocks and " << THREADS_PER_BLOCK << " threads/block." << std::endl;
+    std::cout << "Launching kernel " << NUM_ITERATIONS << " times with " << NUM_BLOCKS << " blocks and " << THREADS_PER_BLOCK << " threads/block." << std::endl;
 
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
     cudaEventRecord(start);
-    baseline_elementwise_kernel<<<NUM_BLOCKS, THREADS_PER_BLOCK>>>(d_output, d_input, N);
+
+    for (int i = 0; i < NUM_ITERATIONS; ++i) {
+        baseline_elementwise_kernel<<<NUM_BLOCKS, THREADS_PER_BLOCK>>>(d_output, d_input, N);
+    }
+
     cudaEventRecord(stop);
 
     cudaDeviceSynchronize();
     checkCudaError(cudaGetLastError(), "kernel launch");
 
-    float milliseconds = 0;
+    float total_milliseconds = 0;
     cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    std::cout << "Kernel execution time (rough): " << milliseconds * 1000.0f << " us" << std::endl;
+    cudaEventElapsedTime(&total_milliseconds, start, stop);
+
+    float average_milliseconds = total_milliseconds / NUM_ITERATIONS;
+    
+    std::cout << "Total execution time for " << NUM_ITERATIONS << " runs: " << total_milliseconds << " ms" << std::endl;
+    std::cout << "Average kernel execution time: " << average_milliseconds * 1000.0f << " us" << std::endl;
 
     checkCudaError(cudaMemcpy(h_output.data(), d_output, bytes, cudaMemcpyDeviceToHost), "output copy D->H");
 
