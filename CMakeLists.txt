@@ -3,6 +3,8 @@ project(gelu C CXX CUDA)
 
 find_package(CUDA REQUIRED)
 
+set(CMAKE_CUDA_ARCHITECTURES "86" CACHE STRING "Target CUDA architectures")
+
 set(CUDA_SEPARABLE_COMPILATION ON)
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 
@@ -14,11 +16,11 @@ add_executable(gelu
 target_include_directories(gelu PRIVATE ${CUDA_INCLUDE_DIRS})
 
 target_compile_options(gelu PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:-std=c++14;-O3;-lineinfo;--expt-relaxed-constexpr>
-    $<$<COMPILE_LANGUAGE:CUDA>:SHELL:-arch=sm_80>
+    $<$<COMPILE_LANGUAGE:CUDA>:-std=c++14>
+    $<$<COMPILE_LANGUAGE:CUDA>:-O3>
+    $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
+    $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>
 )
-
-set(CMAKE_CUDA_ARCHITECTURES "86" CACHE STRING "Target CUDA architectures")
 
 target_link_libraries(gelu PRIVATE
     ${CUDA_LIBRARIES}
