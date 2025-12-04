@@ -18,7 +18,10 @@ int main() {
     const int N = 1 << N_BITS; // 16,777,216 elements
     const size_t bytes = N * sizeof(float);
 
-    std::cout << "--- GELU Test (1000 Iterations) ---" << std::endl;
+    const int WARMUP_RUNS = 10;
+    const int TIMING_RUNS = 100; 
+
+    std::cout << "--- GELU Stable Timing Test ---" << std::endl;
     std::cout << "Array Size N: " << N << " (" << (double)bytes / (1024*1024*1024) << " GB)" << std::endl;
 
     std::vector<float> h_input(N);
@@ -36,41 +39,51 @@ int main() {
 
     const int THREADS_PER_BLOCK = 256;
     const int NUM_BLOCKS = (N + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-    const int NUM_ITERATIONS = 1000;
 
-    std::cout << "Launching kernel " << NUM_ITERATIONS << " times with " << NUM_BLOCKS << " blocks and " << THREADS_PER_BLOCK << " threads/block." << std::endl;
+    std::cout << "Grid: " << NUM_BLOCKS << " blocks, " << THREADS_PER_BLOCK << " threads/block." << std::endl;
 
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    cudaEventRecord(start);
-
-    for (int i = 0; i < NUM_ITERATIONS; ++i) {
+    std::cout << "Warming up the GPU and Caches (" << WARMUP_RUNS << " runs)..." << std::endl;
+    for (int i = 0; i < WARMUP_RUNS; ++i) {
         baseline_elementwise_kernel<<<NUM_BLOCKS, THREADS_PER_BLOCK>>>(d_output, d_input, N);
     }
-
-    cudaEventRecord(stop);
-
     cudaDeviceSynchronize();
-    checkCudaError(cudaGetLastError(), "kernel launch");
+    checkCudaError(cudaGetLastError(), "warm-up kernel launch");
 
     float total_milliseconds = 0;
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&total_milliseconds, start, stop);
-
-    float average_milliseconds = total_milliseconds / NUM_ITERATIONS;
+    std::cout << "Starting Stable Timing Loop (" << TIMING_RUNS << " runs)..." << std::endl;
     
-    std::cout << "Total execution time for " << NUM_ITERATIONS << " runs: " << total_milliseconds << " ms" << std::endl;
-    std::cout << "Average kernel execution time: " << average_milliseconds * 1000.0f << " us" << std::endl;
+    for (int i = 0; i < TIMING_RUNS; ++i) {
+        cudaEventRecord(start);
+        
+        // Kernel launch
+        baseline_elementwise_kernel<<<NUM_BLOCKS, THREADS_PER_BLOCK>>>(d_output, d_input, N);
+
+        cudaEventRecord(stop);
+
+        cudaEventSynchronize(stop); 
+
+        float milliseconds_i = 0;
+        cudaEventElapsedTime(&milliseconds_i, start, stop);
+        total_milliseconds += milliseconds_i;
+    }
+
+    float average_milliseconds = total_milliseconds / TIMING_RUNS;
+    
+    std::cout << "\n--- Timing Results ---" << std::endl;
+    std::cout << "Total execution time for " << TIMING_RUNS << " stable runs: " << total_milliseconds << " ms" << std::endl;
+    std::cout << "**Average kernel execution time:** " << average_milliseconds * 1000.0f << " us" << std::endl;
 
     checkCudaError(cudaMemcpy(h_output.data(), d_output, bytes, cudaMemcpyDeviceToHost), "output copy D->H");
 
     const float expected_value = 0.84134475f; // GELU(1.0)=0.5⋅[1+erf(0.70710678)] => GELU(1.0)≈0.5⋅[1+0.68268949]
     if (std::abs(h_output[N/2] - expected_value) < 1e-5) {
-        std::cout << "Verification Check: PASSED (midpoint value: " << h_output[N/2] << ")" << std::endl;
+        std::cout << "\nVerification Check: **PASSED** (midpoint value: " << h_output[N/2] << ")" << std::endl;
     } else {
-        std::cout << "Verification Check: FAILED (midpoint value: " << h_output[N/2] << ", Expected: " << expected_value << ")" << std::endl;
+        std::cout << "\nVerification Check: **FAILED** (midpoint value: " << h_output[N/2] << ", Expected: " << expected_value << ")" << std::endl;
     }
 
     cudaEventDestroy(start);
