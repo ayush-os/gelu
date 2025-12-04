@@ -7,7 +7,7 @@ set(CUDA_SEPARABLE_COMPILATION ON)
 set(CUDA_PROPAGATE_HOST_FLAGS OFF)
 
 add_executable(gelu
-    src/host_main.cpp
+    src/host_main.cu
     src/kernels/kernel_baseline.cu
 )
 
